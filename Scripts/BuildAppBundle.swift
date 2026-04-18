@@ -5,6 +5,8 @@ let appName = "Ride Coach Beta"
 let executableName = "RideCoach"
 let bundleIdentifier = "com.joncover.RideCoachBeta"
 let version = "0.0.1.14"
+let signingIdentity = ProcessInfo.processInfo.environment["RIDECOACH_SIGN_IDENTITY"] ?? "-"
+let isDeveloperIDBuild = signingIdentity.contains("Developer ID Application")
 let appURL = packageDirectory.appendingPathComponent(".build/\(appName).app")
 let contentsURL = appURL.appendingPathComponent("Contents")
 let macOSURL = contentsURL.appendingPathComponent("MacOS")
@@ -89,13 +91,26 @@ let infoPlist = """
 try infoPlist.write(to: contentsURL.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 try "APPL????".write(to: contentsURL.appendingPathComponent("PkgInfo"), atomically: true, encoding: .ascii)
 
-try run("/usr/bin/codesign", [
+var codesignArguments = [
     "--force",
     "--deep",
     "--sign",
-    "-",
+    signingIdentity,
+]
+
+if isDeveloperIDBuild {
+    codesignArguments.append(contentsOf: [
+        "--options",
+        "runtime",
+        "--timestamp"
+    ])
+}
+
+codesignArguments.append(
     appURL.path
-])
+)
+
+try run("/usr/bin/codesign", codesignArguments)
 
 print(appURL.path)
 

@@ -26,6 +26,14 @@ open "/Applications/Ride Coach Beta.app"
 
 For broader public distribution, Ride Coach Beta should eventually be signed with an Apple Developer ID certificate and notarized.
 
+If you have a Developer ID certificate and notarytool profile configured:
+
+```sh
+export RIDECOACH_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+export RIDECOACH_NOTARY_PROFILE="RideCoachNotary"
+swift Scripts/BuildNotarizedDMG.swift
+```
+
 ## Development
 
 Build and launch the app bundle for notification support:

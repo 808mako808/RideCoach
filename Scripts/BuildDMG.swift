@@ -3,6 +3,8 @@ import Foundation
 let packageDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 let appName = "Ride Coach Beta"
 let version = "0.0.1.14"
+let signingIdentity = ProcessInfo.processInfo.environment["RIDECOACH_SIGN_IDENTITY"]
+let notaryProfile = ProcessInfo.processInfo.environment["RIDECOACH_NOTARY_PROFILE"]
 let appURL = packageDirectory.appendingPathComponent(".build/\(appName).app")
 let stagingURL = packageDirectory.appendingPathComponent(".build/dmg-staging")
 let outputURL = packageDirectory.appendingPathComponent(".build/\(appName)-\(version).dmg")
@@ -84,5 +86,32 @@ try run("/usr/bin/hdiutil", [
     "UDZO",
     outputURL.path
 ])
+
+if let signingIdentity, signingIdentity.contains("Developer ID") {
+    try run("/usr/bin/codesign", [
+        "--force",
+        "--sign",
+        signingIdentity,
+        "--timestamp",
+        outputURL.path
+    ])
+}
+
+if let notaryProfile, !notaryProfile.isEmpty {
+    try run("/usr/bin/xcrun", [
+        "notarytool",
+        "submit",
+        outputURL.path,
+        "--keychain-profile",
+        notaryProfile,
+        "--wait"
+    ])
+
+    try run("/usr/bin/xcrun", [
+        "stapler",
+        "staple",
+        outputURL.path
+    ])
+}
 
 print(outputURL.path)
