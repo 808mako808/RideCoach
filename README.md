@@ -6,6 +6,28 @@ Ride Coach Beta uses local AI analysis from Ollama. AI output may be incomplete,
 
 ## Run
 
+## Install From GitHub
+
+Ride Coach Beta is currently ad-hoc signed, but it is not notarized by Apple. After downloading the DMG, macOS Gatekeeper may say it cannot verify that the app is free from malware.
+
+To open it:
+
+1. Drag `Ride Coach Beta.app` to Applications.
+2. Control-click or right-click the app in Applications.
+3. Choose Open.
+4. Click Open again if macOS asks for confirmation.
+
+If macOS still blocks it and you trust this GitHub build, remove the quarantine flag:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Ride Coach Beta.app"
+open "/Applications/Ride Coach Beta.app"
+```
+
+For broader public distribution, Ride Coach Beta should eventually be signed with an Apple Developer ID certificate and notarized.
+
+## Development
+
 Build and launch the app bundle for notification support:
 
 ```sh
