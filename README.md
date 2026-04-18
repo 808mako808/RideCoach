@@ -4,35 +4,14 @@ Ride Coach is a macOS menu bar app that connects to Strava, checks for new rides
 
 Ride Coach Beta uses local AI analysis from Ollama. AI output may be incomplete, inaccurate, or overconfident, and it may miss important training, medical, weather, equipment, traffic, or safety context. Treat the analysis as a helpful reflection aid, not professional coaching, medical advice, or a substitute for your own judgment.
 
-## Run
-
 ## Install From GitHub
 
-Ride Coach Beta is currently ad-hoc signed, but it is not notarized by Apple. After downloading the DMG, macOS Gatekeeper may say it cannot verify that the app is free from malware.
+Download the latest DMG from the [Ride Coach Beta releases page](https://github.com/808mako808/RideCoach/releases). The release DMG is signed with Developer ID and notarized by Apple.
 
-To open it:
+To install:
 
 1. Drag `Ride Coach Beta.app` to Applications.
-2. Control-click or right-click the app in Applications.
-3. Choose Open.
-4. Click Open again if macOS asks for confirmation.
-
-If macOS still blocks it and you trust this GitHub build, remove the quarantine flag:
-
-```sh
-xattr -dr com.apple.quarantine "/Applications/Ride Coach Beta.app"
-open "/Applications/Ride Coach Beta.app"
-```
-
-For broader public distribution, Ride Coach Beta should eventually be signed with an Apple Developer ID certificate and notarized.
-
-If you have a Developer ID certificate and notarytool profile configured:
-
-```sh
-export RIDECOACH_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
-export RIDECOACH_NOTARY_PROFILE="RideCoachNotary"
-swift Scripts/BuildNotarizedDMG.swift
-```
+2. Open `Ride Coach Beta.app` from Applications.
 
 ## Development
 
@@ -47,6 +26,14 @@ Build a GitHub release DMG:
 
 ```sh
 swift Scripts/BuildDMG.swift
+```
+
+Build a Developer ID signed and Apple-notarized release DMG:
+
+```sh
+export RIDECOACH_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+export RIDECOACH_NOTARY_PROFILE="RideCoachNotary"
+swift Scripts/BuildNotarizedDMG.swift
 ```
 
 You can still run the raw executable while developing, but macOS notifications require the app bundle:
