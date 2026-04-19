@@ -8,8 +8,10 @@ final class SettingsViewController: NSViewController, NSWindowDelegate {
     private let clientSecretField = NSSecureTextField()
     private let ollamaBaseURLField = NSTextField()
     private let ollamaModelPopup = NSPopUpButton()
+    private let comparisonWindowPopup = NSPopUpButton()
     private let autoCheckButton = NSButton(checkboxWithTitle: "Check automatically", target: nil, action: nil)
     private let notificationsButton = NSButton(checkboxWithTitle: "Notify when new rides are analyzed", target: nil, action: nil)
+    private let autoUpdateCheckButton = NSButton(checkboxWithTitle: "Check for updates automatically", target: nil, action: nil)
     private let cadenceControl = NSSegmentedControl(labels: CheckCadence.allCases.map(\.title), trackingMode: .selectOne, target: nil, action: nil)
     private let checkTimePicker = NSDatePicker()
     private let weekdayPopup = NSPopUpButton()
@@ -100,9 +102,14 @@ final class SettingsViewController: NSViewController, NSWindowDelegate {
             ]),
             note("Ride Coach uses a local Ollama server. Install Ollama separately, start it, then install the selected model.")
         ]))
+        stack.addArrangedSubview(section(title: "Analysis", views: [
+            labeledPopup("Comparison window", comparisonWindowPopup),
+            note("Ride Coach summarizes the selected window before sending it to Ollama, so 1 year adds context without sending every ride in detail.")
+        ]))
         stack.addArrangedSubview(section(title: "Checks", views: [
             autoCheckButton,
             notificationsButton,
+            autoUpdateCheckButton,
             cadenceControl,
             weekdayRow,
             checkTimeRow,
@@ -111,7 +118,9 @@ final class SettingsViewController: NSViewController, NSWindowDelegate {
                 button("Check Now", action: #selector(checkNow)),
                 button("Reanalyze Latest", action: #selector(reanalyzeLatest)),
                 button("Send Test Notification", action: #selector(sendTestNotification)),
-                button("Open Notification Settings", action: #selector(openNotificationSettings))
+                button("Open Notification Settings", action: #selector(openNotificationSettings)),
+                button("Check for Updates", action: #selector(checkForUpdates)),
+                button("Open Releases", action: #selector(openLatestRelease))
             ]),
             note("Reanalyze Latest clears saved ride analysis state and runs a fresh check with the current Ollama model.")
         ]))
@@ -149,10 +158,21 @@ final class SettingsViewController: NSViewController, NSWindowDelegate {
         ollamaModelPopup.action = #selector(saveToStore)
         ollamaModelPopup.translatesAutoresizingMaskIntoConstraints = false
 
+        comparisonWindowPopup.removeAllItems()
+        for window in ComparisonWindow.allCases {
+            comparisonWindowPopup.addItem(withTitle: window.title)
+            comparisonWindowPopup.lastItem?.representedObject = window.rawValue
+        }
+        comparisonWindowPopup.target = self
+        comparisonWindowPopup.action = #selector(saveToStore)
+        comparisonWindowPopup.translatesAutoresizingMaskIntoConstraints = false
+
         autoCheckButton.target = self
         autoCheckButton.action = #selector(saveToStore)
         notificationsButton.target = self
         notificationsButton.action = #selector(saveToStore)
+        autoUpdateCheckButton.target = self
+        autoUpdateCheckButton.action = #selector(saveToStore)
         cadenceControl.target = self
         cadenceControl.action = #selector(saveToStore)
 
@@ -181,8 +201,10 @@ final class SettingsViewController: NSViewController, NSWindowDelegate {
         clientSecretField.stringValue = store.clientSecret
         ollamaBaseURLField.stringValue = store.ollamaBaseURL
         selectModel(store.ollamaModel)
+        selectComparisonWindow(store.comparisonWindow)
         autoCheckButton.state = store.autoCheckEnabled ? .on : .off
         notificationsButton.state = store.notificationsEnabled ? .on : .off
+        autoUpdateCheckButton.state = store.autoCheckForUpdates ? .on : .off
         cadenceControl.selectedSegment = CheckCadence.allCases.firstIndex(of: store.cadence) ?? 0
         selectWeekday(store.scheduledWeekday)
         checkTimePicker.dateValue = dateForTime(hour: store.scheduledHour, minute: store.scheduledMinute)
@@ -195,8 +217,10 @@ final class SettingsViewController: NSViewController, NSWindowDelegate {
         store.clientSecret = clientSecretField.stringValue
         store.ollamaBaseURL = ollamaBaseURLField.stringValue
         store.ollamaModel = ollamaModelPopup.selectedItem?.representedObject as? String ?? OllamaModelOption.llamaSmall.rawValue
+        store.comparisonWindow = ComparisonWindow(rawValue: comparisonWindowPopup.selectedItem?.representedObject as? String ?? "") ?? .oneYear
         store.autoCheckEnabled = autoCheckButton.state == .on
         store.notificationsEnabled = notificationsButton.state == .on
+        store.autoCheckForUpdates = autoUpdateCheckButton.state == .on
         store.cadence = CheckCadence.allCases[max(0, cadenceControl.selectedSegment)]
         let components = Calendar.current.dateComponents([.hour, .minute], from: checkTimePicker.dateValue)
         store.scheduledHour = components.hour ?? 8
@@ -243,6 +267,15 @@ final class SettingsViewController: NSViewController, NSWindowDelegate {
 
     @objc private func openNotificationSettings() {
         store?.openNotificationSettings()
+    }
+
+    @objc private func checkForUpdates() {
+        saveToStore()
+        Task { await store?.checkForUpdates() }
+    }
+
+    @objc private func openLatestRelease() {
+        store?.openLatestRelease()
     }
 
     @objc private func checkOllama() {
@@ -303,6 +336,13 @@ final class SettingsViewController: NSViewController, NSWindowDelegate {
         let selectedModel = OllamaModelOption.allCases.first { $0.rawValue == model } ?? .llamaSmall
         for item in ollamaModelPopup.itemArray where item.representedObject as? String == selectedModel.rawValue {
             ollamaModelPopup.select(item)
+            return
+        }
+    }
+
+    private func selectComparisonWindow(_ comparisonWindow: ComparisonWindow) {
+        for item in comparisonWindowPopup.itemArray where item.representedObject as? String == comparisonWindow.rawValue {
+            comparisonWindowPopup.select(item)
             return
         }
     }

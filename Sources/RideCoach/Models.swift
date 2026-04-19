@@ -2,8 +2,11 @@ import Foundation
 
 enum AppInfo {
     static let displayName = "Ride Coach Beta"
-    static let version = "0.0.1.14"
+    static let version = "0.0.1.15"
     static let bundleIdentifier = "com.joncover.RideCoachBeta"
+    static let repositoryURL = URL(string: "https://github.com/808mako808/RideCoach")!
+    static let latestReleaseAPIURL = URL(string: "https://api.github.com/repos/808mako808/RideCoach/releases/latest")!
+    static let releasesURL = URL(string: "https://github.com/808mako808/RideCoach/releases/latest")!
     static let fullName = "\(displayName) \(version)"
 }
 
@@ -63,6 +66,60 @@ enum OllamaModelOption: String, CaseIterable, Identifiable {
         case .llamaMedium:
             "stronger; slower analysis"
         }
+    }
+}
+
+enum ComparisonWindow: String, CaseIterable, Identifiable, Codable {
+    case threeMonths
+    case sixMonths
+    case oneYear
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .threeMonths: "3 months"
+        case .sixMonths: "6 months"
+        case .oneYear: "1 year"
+        }
+    }
+
+    var promptTitle: String {
+        switch self {
+        case .threeMonths: "last 3 months"
+        case .sixMonths: "last 6 months"
+        case .oneYear: "last year"
+        }
+    }
+
+    var maxPages: Int {
+        switch self {
+        case .threeMonths: 8
+        case .sixMonths: 12
+        case .oneYear: 24
+        }
+    }
+
+    func startDate(before date: Date) -> Date {
+        let calendar = Calendar.current
+        switch self {
+        case .threeMonths:
+            return calendar.date(byAdding: .month, value: -3, to: date) ?? date.addingTimeInterval(-90 * 24 * 60 * 60)
+        case .sixMonths:
+            return calendar.date(byAdding: .month, value: -6, to: date) ?? date.addingTimeInterval(-180 * 24 * 60 * 60)
+        case .oneYear:
+            return calendar.date(byAdding: .year, value: -1, to: date) ?? date.addingTimeInterval(-365 * 24 * 60 * 60)
+        }
+    }
+}
+
+struct GitHubRelease: Decodable {
+    let tagName: String
+    let htmlURL: URL
+
+    enum CodingKeys: String, CodingKey {
+        case tagName = "tag_name"
+        case htmlURL = "html_url"
     }
 }
 

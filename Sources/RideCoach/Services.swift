@@ -230,14 +230,14 @@ struct OllamaService {
         return decoded.status ?? "success"
     }
 
-    func analyze(activity: StravaActivitySummary, history: [StravaActivitySummary]) async throws -> String {
+    func analyze(activity: StravaActivitySummary, history: [StravaActivitySummary], comparisonWindow: ComparisonWindow) async throws -> String {
         var request = URLRequest(url: baseURL.appendingPathComponent("generate"))
         request.httpMethod = "POST"
         request.timeoutInterval = 180
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(OllamaGenerateRequest(
             model: model,
-            prompt: prompt(for: activity, history: history),
+            prompt: prompt(for: activity, history: history, comparisonWindow: comparisonWindow),
             stream: false
         ))
 
@@ -256,22 +256,22 @@ struct OllamaService {
         return text
     }
 
-    private func prompt(for activity: StravaActivitySummary, history: [StravaActivitySummary]) -> String {
+    private func prompt(for activity: StravaActivitySummary, history: [StravaActivitySummary], comparisonWindow: ComparisonWindow) -> String {
         let distanceMiles = activity.distance / 1609.344
         let averageMPH = (activity.averageSpeed ?? 0) * 2.236936
         let maxMPH = (activity.maxSpeed ?? 0) * 2.236936
         let movingMinutes = activity.movingTime / 60
-        let historySummary = summary(for: history, comparingTo: activity)
+        let historySummary = summary(for: history, comparingTo: activity, comparisonWindow: comparisonWindow)
 
         return """
         You are Ride Coach, a concise cycling coach. Analyze this Strava ride in 5 bullets:
         - one-sentence ride summary
-        - comparison to the rider's last 3 months of riding
+        - comparison to the rider's \(comparisonWindow.promptTitle) of riding
         - pacing and endurance notes
         - intensity notes
         - one recovery recommendation
 
-        Last 3 months context:
+        \(comparisonWindow.promptTitle.capitalized) context:
         \(historySummary)
 
         Ride data:
@@ -292,7 +292,7 @@ struct OllamaService {
         """
     }
 
-    private func summary(for history: [StravaActivitySummary], comparingTo activity: StravaActivitySummary) -> String {
+    private func summary(for history: [StravaActivitySummary], comparingTo activity: StravaActivitySummary, comparisonWindow: ComparisonWindow) -> String {
         let rides = history
             .filter { $0.type.lowercased().contains("ride") }
             .sorted { $0.startDateLocal > $1.startDateLocal }
@@ -324,7 +324,7 @@ struct OllamaService {
         Average ride speed: \(String(format: "%.1f", averageSpeedMPH)) mph
         Average power when available: \(averagePower.map { String(format: "%.0f W", $0) } ?? "n/a")
         Longest ride: \(longestRide.map { "\($0.name), \(String(format: "%.1f", $0.distance / 1609.344)) mi" } ?? "n/a")
-        This ride distance versus 3-month average: \(String(format: "%.0f", currentDistanceRatio * 100))%
+        This ride distance versus \(comparisonWindow.promptTitle) average: \(String(format: "%.0f", currentDistanceRatio * 100))%
         Recent rides:
         \(recentLines)
         """

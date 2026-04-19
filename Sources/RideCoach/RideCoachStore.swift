@@ -64,6 +64,14 @@ final class RideCoachStore: ObservableObject {
         }
     }
 
+    @Published var comparisonWindow: ComparisonWindow {
+        didSet { UserDefaults.standard.set(comparisonWindow.rawValue, forKey: Keys.comparisonWindow) }
+    }
+
+    @Published var autoCheckForUpdates: Bool {
+        didSet { UserDefaults.standard.set(autoCheckForUpdates, forKey: Keys.autoCheckForUpdates) }
+    }
+
     private var accessToken: String {
         get { UserDefaults.standard.string(forKey: Keys.accessToken) ?? "" }
         set { UserDefaults.standard.set(newValue, forKey: Keys.accessToken) }
@@ -132,6 +140,8 @@ final class RideCoachStore: ObservableObject {
         scheduledHour = UserDefaults.standard.object(forKey: Keys.scheduledHour) as? Int ?? 8
         scheduledMinute = UserDefaults.standard.object(forKey: Keys.scheduledMinute) as? Int ?? 0
         scheduledWeekday = UserDefaults.standard.object(forKey: Keys.scheduledWeekday) as? Int ?? 2
+        comparisonWindow = ComparisonWindow(rawValue: UserDefaults.standard.string(forKey: Keys.comparisonWindow) ?? "") ?? .oneYear
+        autoCheckForUpdates = UserDefaults.standard.object(forKey: Keys.autoCheckForUpdates) as? Bool ?? true
 
         if
             let data = UserDefaults.standard.data(forKey: Keys.lastAnalysis),
@@ -142,6 +152,10 @@ final class RideCoachStore: ObservableObject {
         }
 
         scheduleChecks()
+
+        if autoCheckForUpdates {
+            Task { await checkForUpdates(silent: true) }
+        }
     }
 
     func connectStrava() {
@@ -177,16 +191,16 @@ final class RideCoachStore: ObservableObject {
         do {
             let service = stravaService()
             let token = try await validAccessToken(using: service)
-            let historyStart = Calendar.current.date(byAdding: .month, value: -3, to: Date()) ?? Date().addingTimeInterval(-90 * 24 * 60 * 60)
-            status = "Fetching 3 months of rides..."
-            let activities = try await service.activities(accessToken: token, after: historyStart, maxPages: 8)
+            let historyStart = comparisonWindow.startDate(before: Date())
+            status = "Fetching \(comparisonWindow.title) of rides..."
+            let activities = try await service.activities(accessToken: token, after: historyStart, maxPages: comparisonWindow.maxPages)
             let rides = activities
                 .filter { $0.type.lowercased().contains("ride") }
                 .sorted { $0.startDateLocal > $1.startDateLocal }
 
             guard let newestRide = rides.first else {
                 lastCheckDate = Date()
-                status = "No rides found in the last 3 months"
+                status = "No rides found in the last \(comparisonWindow.title)"
                 return
             }
 
@@ -205,7 +219,7 @@ final class RideCoachStore: ObservableObject {
 
             guard !newRides.isEmpty else {
                 lastCheckDate = Date()
-                status = "No new rides. Compared \(rides.count) rides from 3 months."
+                status = "No new rides. Compared \(rides.count) rides from \(comparisonWindow.title)."
                 return
             }
 
@@ -219,7 +233,7 @@ final class RideCoachStore: ObservableObject {
             for (index, ride) in newRides.enumerated() {
                 status = "Analyzing \(index + 1) of \(newRides.count): \(ride.name)"
                 do {
-                    let analysis = try await ollama.analyze(activity: ride, history: rides)
+                    let analysis = try await ollama.analyze(activity: ride, history: rides, comparisonWindow: comparisonWindow)
                     let displayAnalysis = analysis.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !displayAnalysis.isEmpty else {
                         throw RideCoachError.ollamaResponseEmpty
@@ -266,10 +280,41 @@ final class RideCoachStore: ObservableObject {
             lastAnalysisActivityDate = newestAnalyzedRide.startDateLocal
             lastCheckDate = Date()
             let failureNote = failedRideCount > 0 ? ", \(failedRideCount) failed" : ""
-            status = "Analyzed \(newRides.count - failedRideCount) new ride\(newRides.count - failedRideCount == 1 ? "" : "s")\(failureNote) using \(rides.count) rides of history (\(combinedAnalysis.count) chars)"
+            status = "Analyzed \(newRides.count - failedRideCount) new ride\(newRides.count - failedRideCount == 1 ? "" : "s")\(failureNote) using \(rides.count) rides from \(comparisonWindow.title) (\(combinedAnalysis.count) chars)"
             notifyAnalysisComplete(successCount: newRides.count - failedRideCount, failedCount: failedRideCount, latestRideName: newestAnalyzedRide.name)
         } catch {
             status = error.localizedDescription
+        }
+    }
+
+    func checkForUpdates(silent: Bool = false) async {
+        do {
+            var request = URLRequest(url: AppInfo.latestReleaseAPIURL)
+            request.timeoutInterval = 15
+            request.setValue("RideCoachBeta/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                if !silent {
+                    status = "Could not check for updates."
+                }
+                return
+            }
+
+            let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
+            let latestVersion = release.tagName.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+            if isVersion(latestVersion, newerThan: AppInfo.version) {
+                status = "Update available: \(release.tagName)"
+                if autoCheckForUpdates || !silent {
+                    NSWorkspace.shared.open(release.htmlURL)
+                }
+            } else if !silent {
+                status = "Ride Coach Beta is up to date."
+            }
+        } catch {
+            if !silent {
+                status = "Could not check for updates: \(error.localizedDescription)"
+            }
         }
     }
 
@@ -337,6 +382,10 @@ final class RideCoachStore: ObservableObject {
 
     func openOllamaDownload() {
         NSWorkspace.shared.open(URL(string: "https://ollama.com/download")!)
+    }
+
+    func openLatestRelease() {
+        NSWorkspace.shared.open(AppInfo.releasesURL)
     }
 
     func revealStravaIcon() {
@@ -463,6 +512,22 @@ final class RideCoachStore: ObservableObject {
             clientSecret: clientSecret.trimmingCharacters(in: .whitespacesAndNewlines),
             callbackPort: callbackPort
         )
+    }
+
+    private func isVersion(_ candidate: String, newerThan current: String) -> Bool {
+        let candidateParts = candidate.split(separator: ".").compactMap { Int($0) }
+        let currentParts = current.split(separator: ".").compactMap { Int($0) }
+        let count = max(candidateParts.count, currentParts.count)
+
+        for index in 0..<count {
+            let candidateValue = index < candidateParts.count ? candidateParts[index] : 0
+            let currentValue = index < currentParts.count ? currentParts[index] : 0
+            if candidateValue != currentValue {
+                return candidateValue > currentValue
+            }
+        }
+
+        return false
     }
 
     private func stravaIconURL() -> URL? {
@@ -612,6 +677,8 @@ private enum Keys {
     static let scheduledHour = "scheduledHour"
     static let scheduledMinute = "scheduledMinute"
     static let scheduledWeekday = "scheduledWeekday"
+    static let comparisonWindow = "comparisonWindow"
+    static let autoCheckForUpdates = "autoCheckForUpdates"
     static let lastSeenActivityId = "lastSeenActivityId"
     static let analyzedActivityIds = "analyzedActivityIds"
     static let lastCheckDate = "lastCheckDate"
