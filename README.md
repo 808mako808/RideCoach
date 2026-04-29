@@ -1,4 +1,4 @@
-# Ride Coach Beta 0.0.1.15
+# Ride Coach Beta 0.0.1.16
 
 Ride Coach is a macOS menu bar app that connects to Strava, checks for new rides on an hourly, daily, or weekly cadence, and sends the latest ride to a local Ollama model for coaching feedback.
 
@@ -61,15 +61,16 @@ Ride Coach listens on `http://localhost:8754/callback` while you connect. It req
 
 ## Ride Analysis
 
-Each check fetches up to the selected comparison window of Strava activities, defaulting to one year, and uses the rides in that window as comparison context for Ollama. Ride Coach summarizes the window before sending it to Ollama, then analyzes every unprocessed ride since the last successful analysis, oldest to newest, and stores those ride IDs so the same rides are not analyzed again.
+Each check fetches up to the selected comparison window of Strava activities, defaulting to one year, and uses the rides in that window as comparison context for Ollama. Ride Coach summarizes the window before sending it to Ollama, including compact monthly and 4-week trend context, then analyzes every unprocessed ride since the last successful analysis, oldest to newest, and stores those ride IDs so the same rides are not analyzed again.
 
-If several rides are found, the menu shows one combined analysis with a section for each new ride.
+If several rides are found, the menu shows one combined analysis with a section for each new ride. Recent analyses are kept in the menu so you can look back without re-running Ollama.
 
 ## Configuration
 
 The menu bar Settings window lets you configure:
 
 - Strava client ID and client secret
+- Setup checklist for the main pieces Ride Coach needs
 - Ollama base URL, defaulting to `http://localhost:11434/api`
 - Ollama setup helpers: check Ollama, open the Ollama download page, and install the selected model
 - Ollama model:

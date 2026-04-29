@@ -9,7 +9,11 @@ struct MenuView: View {
 
             Divider()
 
-            if let analysis = store.lastAnalysis {
+            if !store.analysisHistory.isEmpty {
+                analysisPicker
+            }
+
+            if let analysis = store.selectedAnalysis {
                 AnalysisView(record: analysis)
             } else {
                 Text("Connect Strava, keep Ollama running, and Ride Coach will analyze your newest ride.")
@@ -79,6 +83,21 @@ struct MenuView: View {
 
             Spacer()
         }
+    }
+
+    private var analysisPicker: some View {
+        Picker("Analysis", selection: $store.selectedAnalysisId) {
+            ForEach(store.analysisHistory) { record in
+                Text(historyLabel(for: record))
+                    .tag(Optional(record.id))
+            }
+        }
+        .pickerStyle(.menu)
+    }
+
+    private func historyLabel(for record: AnalysisRecord) -> String {
+        let date = shortMenuDate.string(from: record.analyzedAt)
+        return "\(date) - \(record.historyTitle)"
     }
 }
 
@@ -229,6 +248,13 @@ struct SettingsView: View {
         }
     }
 }
+
+private let shortMenuDate: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .short
+    formatter.timeStyle = .short
+    return formatter
+}()
 
 struct SettingsSection<Content: View>: View {
     let title: String

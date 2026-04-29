@@ -2,7 +2,7 @@ import Foundation
 
 enum AppInfo {
     static let displayName = "Ride Coach Beta"
-    static let version = "0.0.1.15"
+    static let version = "0.0.1.16"
     static let bundleIdentifier = "com.joncover.RideCoachBeta"
     static let repositoryURL = URL(string: "https://github.com/808mako808/RideCoach")!
     static let latestReleaseAPIURL = URL(string: "https://api.github.com/repos/808mako808/RideCoach/releases/latest")!
@@ -233,11 +233,23 @@ struct OllamaLocalModel: Decodable {
     let name: String
 }
 
-struct AnalysisRecord: Codable {
+struct AnalysisRecord: Codable, Identifiable {
     let activityId: Int64
     let activityName: String
     let activityStartDate: Date?
     let analyzedAt: Date
     let analyzedRideCount: Int?
     let text: String
+
+    var id: String {
+        "\(activityId)-\(Int(analyzedAt.timeIntervalSince1970))"
+    }
+
+    var historyTitle: String {
+        if let analyzedRideCount, analyzedRideCount > 1 {
+            "\(analyzedRideCount) rides analyzed"
+        } else {
+            activityName
+        }
+    }
 }

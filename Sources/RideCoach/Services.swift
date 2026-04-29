@@ -310,6 +310,8 @@ struct OllamaService {
         let averagePower = averageWatts.isEmpty ? nil : averageWatts.reduce(0, +) / Double(averageWatts.count)
         let longestRide = rides.max { $0.distance < $1.distance }
         let currentDistanceRatio = activity.distance > 0 && averageMiles > 0 ? (activity.distance / 1609.344) / averageMiles : 0
+        let fourWeekTrend = fourWeekTrendLines(for: rides, referenceDate: activity.startDateLocal)
+        let monthlyTrends = monthlyTrendLines(for: rides)
 
         let recentLines = rides.prefix(6).map { ride in
             "- \(shortDate.string(from: ride.startDateLocal)): \(ride.name), \(String(format: "%.1f", ride.distance / 1609.344)) mi, \(ride.movingTime / 60) min, \(String(format: "%.0f", ride.totalElevationGain * 3.28084)) ft, avg HR \(ride.averageHeartrate.map { String(format: "%.0f", $0) } ?? "n/a"), avg watts \(ride.averageWatts.map { String(format: "%.0f", $0) } ?? "n/a")"
@@ -325,9 +327,45 @@ struct OllamaService {
         Average power when available: \(averagePower.map { String(format: "%.0f W", $0) } ?? "n/a")
         Longest ride: \(longestRide.map { "\($0.name), \(String(format: "%.1f", $0.distance / 1609.344)) mi" } ?? "n/a")
         This ride distance versus \(comparisonWindow.promptTitle) average: \(String(format: "%.0f", currentDistanceRatio * 100))%
+        4-week trend:
+        \(fourWeekTrend)
+        Monthly trend:
+        \(monthlyTrends)
         Recent rides:
         \(recentLines)
         """
+    }
+
+    private func monthlyTrendLines(for rides: [StravaActivitySummary]) -> String {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: rides) { ride -> Date in
+            let components = calendar.dateComponents([.year, .month], from: ride.startDateLocal)
+            return calendar.date(from: components) ?? ride.startDateLocal
+        }
+
+        return grouped.keys.sorted().suffix(12).map { month in
+            let monthRides = grouped[month] ?? []
+            return "- \(monthDate.string(from: month)): \(rideMetrics(for: monthRides))"
+        }.joined(separator: "\n")
+    }
+
+    private func fourWeekTrendLines(for rides: [StravaActivitySummary], referenceDate: Date) -> String {
+        let calendar = Calendar.current
+        let recentStart = calendar.date(byAdding: .day, value: -28, to: referenceDate) ?? referenceDate.addingTimeInterval(-28 * 24 * 60 * 60)
+        let priorStart = calendar.date(byAdding: .day, value: -56, to: referenceDate) ?? referenceDate.addingTimeInterval(-56 * 24 * 60 * 60)
+        let recent = rides.filter { $0.startDateLocal >= recentStart && $0.startDateLocal <= referenceDate }
+        let prior = rides.filter { $0.startDateLocal >= priorStart && $0.startDateLocal < recentStart }
+        return """
+        - Last 4 weeks: \(rideMetrics(for: recent))
+        - Previous 4 weeks: \(rideMetrics(for: prior))
+        """
+    }
+
+    private func rideMetrics(for rides: [StravaActivitySummary]) -> String {
+        let miles = rides.reduce(0) { $0 + $1.distance } / 1609.344
+        let hours = Double(rides.reduce(0) { $0 + $1.movingTime }) / 3600
+        let elevationFeet = rides.reduce(0) { $0 + $1.totalElevationGain } * 3.28084
+        return "\(rides.count) rides, \(String(format: "%.1f", miles)) mi, \(String(format: "%.1f", hours)) hr, \(String(format: "%.0f", elevationFeet)) ft"
     }
 }
 
@@ -344,5 +382,11 @@ private let shortDate: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateStyle = .short
     formatter.timeStyle = .none
+    return formatter
+}()
+
+private let monthDate: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "MMM yyyy"
     return formatter
 }()

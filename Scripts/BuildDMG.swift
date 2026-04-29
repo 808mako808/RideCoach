@@ -2,7 +2,7 @@ import Foundation
 
 let packageDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 let appName = "Ride Coach Beta"
-let version = "0.0.1.15"
+let version = "0.0.1.16"
 let signingIdentity = ProcessInfo.processInfo.environment["RIDECOACH_SIGN_IDENTITY"]
 let notaryProfile = ProcessInfo.processInfo.environment["RIDECOACH_NOTARY_PROFILE"]
 let appURL = packageDirectory.appendingPathComponent(".build/\(appName).app")

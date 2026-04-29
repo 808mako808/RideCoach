@@ -18,6 +18,7 @@ final class SettingsViewController: NSViewController, NSWindowDelegate {
     private let scheduleNote = NSTextField(wrappingLabelWithString: "")
     private var weekdayRow: NSView?
     private var checkTimeRow: NSView?
+    private var setupChecklistLabels: [NSTextField] = []
 
     init(store: RideCoachStore) {
         self.store = store
@@ -79,6 +80,7 @@ final class SettingsViewController: NSViewController, NSWindowDelegate {
         stack.addArrangedSubview(section(title: "AI Analysis Caution", views: [
             note("Ride Coach Beta uses local AI analysis from Ollama. AI output may be incomplete, inaccurate, or overconfident, and it may miss important training, medical, weather, equipment, traffic, or safety context. Treat the analysis as a helpful reflection aid, not professional coaching, medical advice, or a substitute for your own judgment.")
         ]))
+        stack.addArrangedSubview(section(title: "Setup Checklist", views: setupChecklistViews()))
         stack.addArrangedSubview(section(title: "Strava", views: [
             labeledField("Client ID", clientIdField),
             labeledField("Client Secret", clientSecretField),
@@ -209,6 +211,7 @@ final class SettingsViewController: NSViewController, NSWindowDelegate {
         selectWeekday(store.scheduledWeekday)
         checkTimePicker.dateValue = dateForTime(hour: store.scheduledHour, minute: store.scheduledMinute)
         refreshScheduleControls()
+        refreshSetupChecklist()
     }
 
     @objc private func saveToStore() {
@@ -227,6 +230,7 @@ final class SettingsViewController: NSViewController, NSWindowDelegate {
         store.scheduledMinute = components.minute ?? 0
         store.scheduledWeekday = weekdayPopup.selectedItem?.representedObject as? Int ?? 2
         refreshScheduleControls()
+        refreshSetupChecklist()
     }
 
     @objc private func openStravaSettings() {
@@ -381,6 +385,36 @@ final class SettingsViewController: NSViewController, NSWindowDelegate {
         case .weekly:
             return "Weekly checks run on the selected day and local time. Next check: \(scheduleDateFormatter.string(from: store.nextCheckDate(after: Date())))."
         }
+    }
+
+    private func setupChecklistViews() -> [NSView] {
+        setupChecklistLabels = (0..<6).map { _ in
+            let label = NSTextField(wrappingLabelWithString: "")
+            label.font = .systemFont(ofSize: 12)
+            return label
+        }
+        return setupChecklistLabels
+    }
+
+    private func refreshSetupChecklist() {
+        guard let store else { return }
+        let rows = [
+            (hasValue(store.clientId) && hasValue(store.clientSecret), "Strava API credentials added"),
+            (store.isConnectedToStrava, "Strava account connected"),
+            (hasValue(store.ollamaBaseURL) && hasValue(store.ollamaModel), "Ollama model selected"),
+            (store.autoCheckEnabled, "Automatic ride checks enabled"),
+            (store.notificationsEnabled, "Notifications enabled"),
+            (true, "Comparison window set to \(store.comparisonWindow.title)")
+        ]
+
+        for (index, row) in rows.enumerated() where index < setupChecklistLabels.count {
+            setupChecklistLabels[index].stringValue = "\(row.0 ? "[x]" : "[ ]") \(row.1)"
+            setupChecklistLabels[index].textColor = row.0 ? .labelColor : .secondaryLabelColor
+        }
+    }
+
+    private func hasValue(_ value: String) -> Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func note(_ text: String) -> NSView {

@@ -8,6 +8,8 @@ final class RideCoachStore: ObservableObject {
     @Published var isChecking = false
     @Published var status = "Ready"
     @Published var lastAnalysis: AnalysisRecord?
+    @Published var analysisHistory: [AnalysisRecord] = []
+    @Published var selectedAnalysisId: String?
 
     @Published var clientId: String {
         didSet { UserDefaults.standard.set(clientId, forKey: Keys.clientId) }
@@ -126,6 +128,14 @@ final class RideCoachStore: ObservableObject {
         !refreshToken.isEmpty
     }
 
+    var selectedAnalysis: AnalysisRecord? {
+        if let selectedAnalysisId,
+           let selected = analysisHistory.first(where: { $0.id == selectedAnalysisId }) {
+            return selected
+        }
+        return lastAnalysis
+    }
+
     init() {
         Self.migrateLegacyDefaultsIfNeeded()
         Self.configureNotifications(delegate: notificationManager)
@@ -143,11 +153,16 @@ final class RideCoachStore: ObservableObject {
         comparisonWindow = ComparisonWindow(rawValue: UserDefaults.standard.string(forKey: Keys.comparisonWindow) ?? "") ?? .oneYear
         autoCheckForUpdates = UserDefaults.standard.object(forKey: Keys.autoCheckForUpdates) as? Bool ?? true
 
-        if
+        analysisHistory = Self.loadAnalysisHistory()
+        if let newest = analysisHistory.first {
+            lastAnalysis = newest
+            selectedAnalysisId = newest.id
+            status = "Last analyzed: \(newest.activityName)"
+        } else if
             let data = UserDefaults.standard.data(forKey: Keys.lastAnalysis),
             let record = try? JSONDecoder().decode(AnalysisRecord.self, from: data)
         {
-            lastAnalysis = record
+            saveAnalysisRecord(record)
             status = "Last analyzed: \(record.activityName)"
         }
 
@@ -271,10 +286,7 @@ final class RideCoachStore: ObservableObject {
                 analyzedRideCount: newRides.count,
                 text: combinedAnalysis
             )
-            lastAnalysis = record
-            if let data = try? JSONEncoder().encode(record) {
-                UserDefaults.standard.set(data, forKey: Keys.lastAnalysis)
-            }
+            saveAnalysisRecord(record)
             analyzedActivityIds = completedIds
             lastSeenActivityId = newestAnalyzedRide.id
             lastAnalysisActivityDate = newestAnalyzedRide.startDateLocal
@@ -410,11 +422,14 @@ final class RideCoachStore: ObservableObject {
 
     func clearAnalysisState() {
         lastAnalysis = nil
+        analysisHistory = []
+        selectedAnalysisId = nil
         lastSeenActivityId = 0
         analyzedActivityIds = []
         lastCheckDate = nil
         lastAnalysisActivityDate = nil
         UserDefaults.standard.removeObject(forKey: Keys.lastAnalysis)
+        UserDefaults.standard.removeObject(forKey: Keys.analysisHistory)
         UserDefaults.standard.removeObject(forKey: Keys.lastSeenActivityId)
         UserDefaults.standard.removeObject(forKey: Keys.analyzedActivityIds)
         UserDefaults.standard.removeObject(forKey: Keys.lastCheckDate)
@@ -444,6 +459,26 @@ final class RideCoachStore: ObservableObject {
 
     func quit() {
         NSApplication.shared.terminate(nil)
+    }
+
+    private func saveAnalysisRecord(_ record: AnalysisRecord) {
+        lastAnalysis = record
+        selectedAnalysisId = record.id
+        analysisHistory = ([record] + analysisHistory)
+            .filterUnique { $0.activityId }
+            .prefix(50)
+            .map { $0 }
+
+        if let data = try? JSONEncoder().encode(record) {
+            UserDefaults.standard.set(data, forKey: Keys.lastAnalysis)
+        }
+        saveAnalysisHistory()
+    }
+
+    private func saveAnalysisHistory() {
+        if let data = try? JSONEncoder().encode(analysisHistory) {
+            UserDefaults.standard.set(data, forKey: Keys.analysisHistory)
+        }
     }
 
     func scheduleChecks() {
@@ -643,11 +678,14 @@ final class RideCoachStore: ObservableObject {
             Keys.scheduledHour,
             Keys.scheduledMinute,
             Keys.scheduledWeekday,
+            Keys.comparisonWindow,
+            Keys.autoCheckForUpdates,
             Keys.lastSeenActivityId,
             Keys.analyzedActivityIds,
             Keys.lastCheckDate,
             Keys.lastAnalysisActivityDate,
-            Keys.lastAnalysis
+            Keys.lastAnalysis,
+            Keys.analysisHistory
         ]
 
         for key in keys where defaults.object(forKey: key) == nil {
@@ -684,6 +722,31 @@ private enum Keys {
     static let lastCheckDate = "lastCheckDate"
     static let lastAnalysisActivityDate = "lastAnalysisActivityDate"
     static let lastAnalysis = "lastAnalysis"
+    static let analysisHistory = "analysisHistory"
+}
+
+private extension RideCoachStore {
+    static func loadAnalysisHistory() -> [AnalysisRecord] {
+        guard
+            let data = UserDefaults.standard.data(forKey: Keys.analysisHistory),
+            let records = try? JSONDecoder().decode([AnalysisRecord].self, from: data)
+        else {
+            return []
+        }
+
+        return records.sorted { $0.analyzedAt > $1.analyzedAt }
+    }
+}
+
+private extension Sequence {
+    func filterUnique<ID: Hashable>(by id: (Element) -> ID) -> [Element] {
+        var seen = Set<ID>()
+        var values: [Element] = []
+        for element in self where seen.insert(id(element)).inserted {
+            values.append(element)
+        }
+        return values
+    }
 }
 
 private let shortDisplayDate: DateFormatter = {
