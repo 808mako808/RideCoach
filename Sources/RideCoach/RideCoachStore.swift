@@ -450,7 +450,7 @@ final class RideCoachStore: ObservableObject {
             settingsWindow = window
         }
 
-        NSApplication.shared.setActivationPolicy(.regular)
+        NSApplication.shared.setActivationPolicy(.accessory)
         NSApplication.shared.activate(ignoringOtherApps: true)
         settingsWindow?.orderFrontRegardless()
         settingsWindow?.makeKeyAndOrderFront(nil)

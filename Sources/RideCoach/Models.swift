@@ -2,7 +2,7 @@ import Foundation
 
 enum AppInfo {
     static let displayName = "Ride Coach Beta"
-    static let version = "0.0.1.16"
+    static let version = "0.0.1.17"
     static let bundleIdentifier = "com.joncover.RideCoachBeta"
     static let repositoryURL = URL(string: "https://github.com/808mako808/RideCoach")!
     static let latestReleaseAPIURL = URL(string: "https://api.github.com/repos/808mako808/RideCoach/releases/latest")!

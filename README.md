@@ -1,4 +1,4 @@
-# Ride Coach Beta 0.0.1.16
+# Ride Coach Beta 0.0.1.17
 
 Ride Coach is a macOS menu bar app that connects to Strava, checks for new rides on an hourly, daily, or weekly cadence, and sends the latest ride to a local Ollama model for coaching feedback.
 
